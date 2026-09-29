@@ -19,9 +19,26 @@ interface EvalOptions {
   timeout?: number
   /** Override or add backends by language key. */
   languages?: Record<string, Partial<Backend>>
+  /**
+   * Nudge the agent toward `eval`: inject one constant system reminder that
+   * cross-references it from the shell workflow. Off by default. The text is
+   * fixed, so the cached prompt prefix stays byte-identical (see README,
+   * "Prompt caching").
+   */
+  steer?: boolean
 }
 
 const DEFAULT_TIMEOUT = 60_000
+
+// Constant by design: appended to every agent-loop system prompt, so any
+// per-request variation here would invalidate the provider's prompt cache.
+const EVAL_STEER_REMINDER =
+  "<system-reminder>\n" +
+  "`eval` runs code in a persistent interpreter: one cell per call, and top-level state " +
+  "(variables, imports, processes) persists across calls. Prefer `eval` over shell for scripts, " +
+  "heredocs, complex pipelines and multi-step computation. A timed-out, aborted or cancelled " +
+  "cell loses its state; re-run needed setup after a reset.\n" +
+  "</system-reminder>"
 
 function resolveLanguage(input: unknown, fallback: string): string {
   const raw = typeof input === "string" && input.trim() ? input.trim().toLowerCase() : fallback
@@ -49,6 +66,7 @@ export default Plugin.define({
     const options = (ctx.options ?? {}) as EvalOptions
     const defaultLanguage = resolveLanguage(options.language ?? process.env.EVAL_DEFAULT_LANGUAGE, "python")
     const defaultTimeout = options.timeout ?? Number(process.env.EVAL_TIMEOUT_MS ?? DEFAULT_TIMEOUT)
+    const steer = options.steer ?? /^(1|true|yes|on)$/i.test(process.env.EVAL_STEER ?? "")
 
     // Backends are resolved once, from built-ins plus any option overrides.
     const backends: Record<string, Backend> = { ...BACKENDS }
@@ -149,6 +167,17 @@ export default Plugin.define({
         },
       })
     })
+
+    // Optional steering toward `eval`, mirroring omp. omp also rewrites the
+    // shell tool's description, but in v2.0.18 a transform can change a
+    // built-in tool's registry entry yet not its provider-facing schema (only
+    // plugin-registered tools update on the wire). So the redirect lives in one
+    // constant system reminder instead — measured byte-stable across requests.
+    if (steer) {
+      await ctx.session.hook("context", (event) => {
+        event.system.push({ type: "text", text: EVAL_STEER_REMINDER })
+      })
+    }
 
     return () => {
       for (const interp of interpreters.values()) interp.dispose()
