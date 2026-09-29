@@ -64,8 +64,9 @@ opencode plugin update github:tanc/opencode-eval
 opencode plugin remove github:tanc/opencode-eval
 ```
 
-**Local development.** OpenCode auto-loads `.opencode/plugins/`, so clone and
-install the one dependency:
+**Local development / local path.** Clone, install the one dependency, and
+register the local `plugin/` directory in your (global or project)
+`opencode.json`:
 
 ```sh
 git clone git@github.com:tanc/opencode-eval.git
@@ -73,27 +74,27 @@ cd opencode-eval
 bun install   # or: npm install
 ```
 
-A *local* plugin must resolve `@opencode/plugin` from its own `node_modules`,
-which is why the install step is required; cache-installed plugins get it
-automatically.
-
-To load it from an arbitrary directory with options, register it in
-`opencode.json`:
-
 ```jsonc
 {
   "plugins": [
     {
-      "package": "./path/to/opencode-eval/.opencode/plugins/eval",
-      "options": {
-        "language": "python",
-        "timeout": 60000,
-        "languages": { "python": { "command": "python3.12" } }
-      }
+      "package": "/abs/path/to/opencode-eval/plugin",
+      "options": { "language": "python", "steer": true }
     }
   ]
 }
 ```
+
+A local plugin must resolve `@opencode/plugin` from its own `node_modules`,
+which is why the install step is required; cache-installed packages get it
+automatically.
+
+> **Register it in exactly one place.** OpenCode does not dedupe: a plugin that
+> is both listed in `plugins` and auto-discovered from `.opencode/plugins/`
+> loads **twice**. This repo keeps its source in `plugin/` (not
+> `.opencode/plugins/`) precisely so it is never auto-discovered — you register
+> it explicitly. That explicit entry is also what makes OpenChamber show an
+> editable options card for it.
 
 | option      | default    | meaning                                    |
 | ----------- | ---------- | ------------------------------------------ |
@@ -153,7 +154,8 @@ one-time prefix shift and nothing after that.
 Smoke-tested against **opencode v2.0.18** (the build OpenChamber ships) with
 `@opencode/plugin` 2.0.19, driving a real model:
 
-- the plugin loads from `.opencode/plugins/eval/`;
+- the plugin loads from a `plugins` config entry (an earlier build auto-loaded
+  it from `.opencode/plugins/`, which double-loads when combined with an entry);
 - `eval` is callable **directly** and returns `[python] ok (53ms)\n42`;
 - state persists across separate tool calls — `x = 41`, then a later
   `print(x + 1)` returns `42` (and latency drops once the interpreter is warm);

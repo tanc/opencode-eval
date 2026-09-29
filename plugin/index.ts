@@ -6,8 +6,10 @@
  * per-call startup cost. This is the "compose and run a script" workbench that
  * the plain `shell` tool does not provide.
  *
- * Loaded automatically from `.opencode/plugins/eval/`, or register the
- * directory in `opencode.json` under `plugins` to pass options.
+ * Loaded by registering this directory (`plugin/`) in `opencode.json` under
+ * `plugins`, e.g. `{ "package": "/abs/path/to/opencode-eval/plugin" }`. It is
+ * deliberately *not* under `.opencode/plugins/`: OpenCode loads that directory
+ * automatically and does not dedupe, so combining the two loads it twice.
  */
 import { Plugin } from "@opencode/plugin"
 import { BACKENDS, Interpreter, LANGUAGE_ALIASES, type Backend, type EvalResult } from "./runtime.ts"

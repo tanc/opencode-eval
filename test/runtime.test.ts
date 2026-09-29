@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test"
-import { BACKENDS, Interpreter } from "../.opencode/plugins/eval/runtime.ts"
+import { BACKENDS, Interpreter } from "../plugin/runtime.ts"
 
 const live: Interpreter[] = []
 function mk(language: string, options: Record<string, unknown> = {}): Interpreter {
