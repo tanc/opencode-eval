@@ -51,20 +51,34 @@ same interpreter are serialised.
   implemented but not exercised in the smoke tests (their runtimes were not
   installed); treat them as experimental.
 
-## Loading it
+## Install
 
-OpenCode loads everything under `.opencode/plugins/`, so this repo is picked up
-as-is. One requirement: a local plugin must resolve `@opencode/plugin` from the
-project's own `node_modules`, so install once:
+**Any project (recommended).** Install straight from this repo; OpenCode
+fetches it into its cache and adds it to your global configuration:
 
 ```sh
+opencode plugin add github:tanc/opencode-eval
+# manage it with:
+opencode plugin list
+opencode plugin update github:tanc/opencode-eval
+opencode plugin remove github:tanc/opencode-eval
+```
+
+**Local development.** OpenCode auto-loads `.opencode/plugins/`, so clone and
+install the one dependency:
+
+```sh
+git clone git@github.com:tanc/opencode-eval.git
+cd opencode-eval
 bun install   # or: npm install
 ```
 
-(Published plugins are installed into OpenCode's cache and don't need this.)
+A *local* plugin must resolve `@opencode/plugin` from its own `node_modules`,
+which is why the install step is required; cache-installed plugins get it
+automatically.
 
-To load it from another directory, register it in `opencode.json` and pass
-options:
+To load it from an arbitrary directory with options, register it in
+`opencode.json`:
 
 ```jsonc
 {
@@ -100,7 +114,9 @@ Smoke-tested against **opencode v2.0.18** (the build OpenChamber ships) with
 - state persists across separate tool calls — `x = 41`, then a later
   `print(x + 1)` returns `42` (and latency drops once the interpreter is warm);
 - a direct call is rejected if `codemode: false` is removed, confirming plugin
-  tools are Code Mode–deferred by default.
+  tools are Code Mode–deferred by default;
+- the same flow works after `opencode plugin add github:tanc/opencode-eval`,
+  run from a directory with no local plugin (installed from the cache).
 
 ## Limitations
 
