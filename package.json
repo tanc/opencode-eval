@@ -1,0 +1,16 @@
+{
+  "name": "opencode-eval",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Persistent, polyglot eval tool for OpenCode v2 — a long-lived interpreter for script composition.",
+  "exports": {
+    ".": "./.opencode/plugins/eval/index.ts"
+  },
+  "scripts": {
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@opencode/plugin": "^2.0.18"
+  }
+}
