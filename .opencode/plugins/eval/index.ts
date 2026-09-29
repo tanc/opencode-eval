@@ -83,6 +83,9 @@ export default Plugin.define({
           "variables, imports and running processes stay alive, so you can build on previous calls " +
           "without re-running setup. Supports python (default), node, bun, ruby, lua and R. " +
           "Returns the code's stdout/stderr and a status. Use reset to start a clean interpreter.",
+        // Plugin tools default to Code Mode (deferred). `codemode: false` makes
+        // `eval` a normal direct tool the agent can call without `execute`.
+        options: { codemode: false },
         input: {
           type: "object",
           properties: {

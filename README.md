@@ -12,7 +12,9 @@ provide.
 
 ## What it registers
 
-One direct tool named `eval`:
+One **direct** tool named `eval` (registered with `codemode: false` — plugin
+tools default to Code Mode and would otherwise be reachable only as
+`tools.eval(...)` from `execute`):
 
 | input       | type      | meaning                                                        |
 | ----------- | --------- | -------------------------------------------------------------- |
@@ -51,11 +53,17 @@ same interpreter are serialised.
 
 ## Loading it
 
-Auto-discovered: OpenCode loads everything under `.opencode/plugins/`, so
-cloning this repo as a project is enough — `.opencode/plugins/eval/` is picked
-up with no configuration.
+OpenCode loads everything under `.opencode/plugins/`, so this repo is picked up
+as-is. One requirement: a local plugin must resolve `@opencode/plugin` from the
+project's own `node_modules`, so install once:
 
-To load it from elsewhere, register the directory in `opencode.json` and pass
+```sh
+bun install   # or: npm install
+```
+
+(Published plugins are installed into OpenCode's cache and don't need this.)
+
+To load it from another directory, register it in `opencode.json` and pass
 options:
 
 ```jsonc
@@ -81,6 +89,18 @@ options:
 
 Environment overrides (useful when auto-discovered, since discovery passes no
 options): `EVAL_DEFAULT_LANGUAGE`, `EVAL_TIMEOUT_MS`.
+
+## Verified
+
+Smoke-tested against **opencode v2.0.18** (the build OpenChamber ships) with
+`@opencode/plugin` 2.0.19, driving a real model:
+
+- the plugin loads from `.opencode/plugins/eval/`;
+- `eval` is callable **directly** and returns `[python] ok (53ms)\n42`;
+- state persists across separate tool calls — `x = 41`, then a later
+  `print(x + 1)` returns `42` (and latency drops once the interpreter is warm);
+- a direct call is rejected if `codemode: false` is removed, confirming plugin
+  tools are Code Mode–deferred by default.
 
 ## Limitations
 
