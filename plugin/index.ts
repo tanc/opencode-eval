@@ -22,12 +22,14 @@ interface EvalOptions {
   /** Override or add backends by language key. */
   languages?: Record<string, Partial<Backend>>
   /**
-   * Nudge the agent toward `eval`: inject one constant system reminder that
-   * cross-references it from the shell workflow. Off by default. The text is
-   * fixed, so the cached prompt prefix stays byte-identical (see README,
-   * "Prompt caching").
+   * Nudge the agent toward `eval`, mirroring oh-my-pi: prefix a constant
+   * redirect to the `shell`/`bash` tool descriptions and inject one constant
+   * system reminder. Off by default. Both strings are fixed, so the cached
+   * prompt prefix stays byte-identical (see README, "Prompt caching").
    */
   steer?: boolean
+  /** Tool descriptions to redirect when `steer` is on. Default ["shell","bash"]. */
+  steerTools?: string[]
 }
 
 const DEFAULT_TIMEOUT = 60_000
@@ -41,6 +43,16 @@ const EVAL_STEER_REMINDER =
   "heredocs, complex pipelines and multi-step computation. A timed-out, aborted or cancelled " +
   "cell loses its state; re-run needed setup after a reset.\n" +
   "</system-reminder>"
+
+// Prefixed to these tools' descriptions on every agent-loop request when `steer`
+// is on. `shell` is the built-in; `bash` is the AFT plugin's. Editing the tool
+// the model is about to reach for is the lever omp uses (it rewrites its own
+// bash description); verified to reach the outgoing request in v2.0.22.
+const DEFAULT_STEER_TOOLS = ["shell", "bash"]
+
+// Constant, like the reminder: a per-request value here would break caching.
+const SHELL_REDIRECT =
+  "Scripts, heredocs, `$(...)`, complex pipelines or multi-step computation → prefer `eval` (persistent interpreter).\n"
 
 function resolveLanguage(input: unknown, fallback: string): string {
   const raw = typeof input === "string" && input.trim() ? input.trim().toLowerCase() : fallback
@@ -170,13 +182,23 @@ export default Plugin.define({
       })
     })
 
-    // Optional steering toward `eval`, mirroring omp. omp also rewrites the
-    // shell tool's description, but in v2.0.18 a transform can change a
-    // built-in tool's registry entry yet not its provider-facing schema (only
-    // plugin-registered tools update on the wire). So the redirect lives in one
-    // constant system reminder instead — measured byte-stable across requests.
+    // Optional steering toward `eval`, mirroring omp. omp *rewrites its bash
+    // tool description* to redirect scripts to eval; the equivalent here is a
+    // constant per-request edit of the `shell`/`bash` descriptions plus one
+    // system reminder. v2.0.22 applies both `event.system` pushes and
+    // `event.tools[...]` description edits to the outgoing request (verified
+    // with an `http.request` hook). Both strings are constant, so the cached
+    // prompt prefix stays byte-identical across requests.
     if (steer) {
+      const steerTools = options.steerTools ?? DEFAULT_STEER_TOOLS
       await ctx.session.hook("context", (event) => {
+        const tools = (event.tools ?? {}) as Record<string, { description?: string } | undefined>
+        for (const name of steerTools) {
+          const tool = tools[name]
+          if (tool && !(tool.description ?? "").includes(SHELL_REDIRECT.trim())) {
+            tool.description = SHELL_REDIRECT + (tool.description ?? "")
+          }
+        }
         event.system.push({ type: "text", text: EVAL_STEER_REMINDER })
       })
     }

@@ -101,58 +101,65 @@ automatically.
 | `language`  | `python`   | backend used when the model omits one      |
 | `timeout`   | `60000`    | default per-cell timeout in ms             |
 | `languages` | built-ins  | add or override backends                   |
-| `steer`     | `false`    | inject a constant reminder preferring `eval` |
+| `steer`     | `false`    | redirect shell/bash descriptions + reminder to prefer `eval` |
+| `steerTools`| `[shell, bash]` | which tool descriptions `steer` edits     |
 
 Environment overrides (useful when auto-discovered, since discovery passes no
 options): `EVAL_DEFAULT_LANGUAGE`, `EVAL_TIMEOUT_MS`, `EVAL_STEER`.
 
 ## Steering the agent (`steer: true`)
 
-By default the agent learns about `eval` only from the tool description. With
-`steer` enabled the plugin also injects one system reminder, mirroring what
-oh-my-pi does — `eval` persists state, and scripts/heredocs/complex pipelines
-should prefer it over `shell`.
+By default the agent learns about `eval` only from its own tool description —
+and in practice models then reach for `shell`/`bash` almost every time. With
+`steer` enabled the plugin nudges them, mirroring oh-my-pi:
 
-One deliberate difference from omp: omp also *rewrites its `bash` tool
-description* to redirect scripts to `eval`. In opencode v2.0.18 a plugin
-transform can change a built-in tool's registry entry but **not** its
-provider-facing schema — `editor.update("shell", …)` shows up in
-`ctx.tool.list()` yet not in the request. (Updating a *plugin-registered* tool
-*does* reach the wire.) So the redirect is carried by the system reminder
-instead of the shell description.
+- it prefixes a constant redirect to the **`shell` and `bash` tool
+descriptions** ("Scripts, heredocs, `$(...)`, complex pipelines or multi-step
+computation → prefer `eval`"). omp does exactly this to its own `bash` tool, and
+it lands at the moment the model is choosing that tool;
+- it appends one constant `<system-reminder>` about persistent state.
+
+Both edits happen in the agent-loop `context` hook. Verified on **v2.0.22** (via
+an `http.request` hook reading the real outgoing payload) that both the
+`event.system` push *and* the `event.tools[...]` description edits reach the
+request. Note this is a different mechanism from `ctx.tool.transform`, where an
+`editor.update("shell", …)` changes `ctx.tool.list()` but not the wire.
+
+Why the redirect and not just the reminder: an audit of 15 real coding sessions
+(Oct 2–6) running a reminder-only build found **0 `eval` calls against 274
+`shell`/`bash` calls** — a single system reminder did not change tool choice. An
+A/B on a script task then chose `bash` with `steer: false` and `eval` with
+`steer: true`. Set `steerTools` to change which descriptions are edited.
 
 ## Prompt caching
 
 Provider prompt caching is prefix-based: the previously sent prefix must be
-byte-identical for a hit, so anything that varies per request — in the system
-prompt or the tool schemas — invalidates the cache from that point on.
+byte-identical for a hit, so anything that varies per request — system prompt or
+tool schemas — invalidates the cache from that point on.
 
 `steer` is built around that:
 
-- the reminder is a fixed string — no timestamps, ids, counters or state;
-- it is appended in the same position on every agent-loop request;
-- it is registered only for the agent loop (`context`), never `title`,
+- both edits are fixed strings — no timestamps, ids, counters or state;
+- they are applied at the same position on every agent-loop request;
+- they are registered only for the agent loop (`context`), never `title`,
   `generate` or `compaction`;
-- the plugin does not touch any tool schema.
+- the redirect is guarded (`if (!description.includes(REDIRECT))`) so a
+  description that already carries it is never re-prefixed.
 
-Measured against v2.0.18 by hashing the fully assembled request (system blocks +
-every tool description) in a `context` hook over consecutive requests of one
-session with `EVAL_STEER=1`:
+Measured on v2.0.22 by reading the real outgoing payload with an `http.request`
+hook over consecutive requests: the redirect appears exactly **twice** (once on
+`shell`, once on `bash`) and that count is **stable** across requests — it does
+not stack — while the reminder is present on every primary request. Enabling
+`steer` costs a one-time prefix shift and nothing after that.
 
-| request | messages | system blocks | system hash        | system+tools hash  |
-| ------- | -------- | ------------- | ------------------ | ------------------ |
-| 1       | 1        | 5             | `e1b5630e51f17dd0` | `50181cb19b502d28` |
-| 2       | 4        | 5             | `e1b5630e51f17dd0` | `50181cb19b502d28` |
-| 3       | 6        | 5             | `e1b5630e51f17dd0` | `50181cb19b502d28` |
-
-Identical hashes → the cacheable prefix never changes; only the message list
-grows, which is append-only and cache-friendly. Enabling `steer` costs a
-one-time prefix shift and nothing after that.
+(An earlier v2.0.18 hash-based run showed the same byte-stable outcome; the
+`http.request` payload check supersedes it because it reads what is actually
+sent rather than a hook's view.)
 
 ## Verified
 
-Smoke-tested against **opencode v2.0.18** (the build OpenChamber ships) with
-`@opencode/plugin` 2.0.19, driving a real model:
+Smoke-tested against **opencode v2.0.22** (the build OpenChamber ships) with
+`@opencode/plugin` 2.0.19, driving real models:
 
 - the plugin loads from a `plugins` config entry (an earlier build auto-loaded
   it from `.opencode/plugins/`, which double-loads when combined with an entry);
@@ -161,8 +168,11 @@ Smoke-tested against **opencode v2.0.18** (the build OpenChamber ships) with
   `print(x + 1)` returns `42` (and latency drops once the interpreter is warm);
 - a direct call is rejected if `codemode: false` is removed, confirming plugin
   tools are Code Mode–deferred by default;
-- with `EVAL_STEER=1` the reminder reaches the assembled request and the
-  system+tools hash is byte-identical across consecutive requests (cache-safe);
+- with `steer: true` the redirect and the reminder both reach the real
+  outgoing request (checked via the `http.request` hook) and the redirect is
+  byte-stable and non-stacking across consecutive requests (cache-safe);
+- the plugin also loads for ordinary project directories (not just this repo),
+  so `eval` is available in normal sessions;
 - the same flow works after `opencode plugin add github:tanc/opencode-eval`,
   run from a directory with no local plugin (installed from the cache).
 
