@@ -191,16 +191,22 @@ export default Plugin.define({
     // prompt prefix stays byte-identical across requests.
     if (steer) {
       const steerTools = options.steerTools ?? DEFAULT_STEER_TOOLS
-      await ctx.session.hook("context", (event) => {
-        const tools = (event.tools ?? {}) as Record<string, { description?: string } | undefined>
-        for (const name of steerTools) {
-          const tool = tools[name]
-          if (tool && !(tool.description ?? "").includes(SHELL_REDIRECT.trim())) {
-            tool.description = SHELL_REDIRECT + (tool.description ?? "")
+      try {
+        await ctx.session.hook("context", (event) => {
+          const tools = (event.tools ?? {}) as Record<string, { description?: string } | undefined>
+          for (const name of steerTools) {
+            const tool = tools[name]
+            if (tool && !(tool.description ?? "").includes(SHELL_REDIRECT.trim())) {
+              tool.description = SHELL_REDIRECT + (tool.description ?? "")
+            }
           }
-        }
-        event.system.push({ type: "text", text: EVAL_STEER_REMINDER })
-      })
+          event.system.push({ type: "text", text: EVAL_STEER_REMINDER })
+        })
+      } catch (err) {
+        // Steering is a nudge, not the feature: if the hook cannot register
+        // (e.g. a future API change), `eval` must still load and work.
+        console.error("[eval] steer hook registration failed: " + (err as Error).message)
+      }
     }
 
     return () => {

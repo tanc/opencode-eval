@@ -127,9 +127,9 @@ request. Note this is a different mechanism from `ctx.tool.transform`, where an
 
 Why the redirect and not just the reminder: an audit of 15 real coding sessions
 (Oct 2–6) running a reminder-only build found **0 `eval` calls against 274
-`shell`/`bash` calls** — a single system reminder did not change tool choice. An
-A/B on a script task then chose `bash` with `steer: false` and `eval` with
-`steer: true`. Set `steerTools` to change which descriptions are edited.
+`shell`/`bash` calls** — a single system reminder did not change tool choice.
+Set `steerTools` to change which descriptions are edited. (The nudge also
+competes with Code Mode: unsteered, a bare computational ask chose `execute`.)
 
 ## Prompt caching
 
@@ -171,6 +171,11 @@ Smoke-tested against **opencode v2.0.22** (the build OpenChamber ships) with
 - with `steer: true` the redirect and the reminder both reach the real
   outgoing request (checked via the `http.request` hook) and the redirect is
   byte-stable and non-stacking across consecutive requests (cache-safe);
+- behaviour A/B, same model and prompt in both arms:
+  - script task ("…run the code"): `steer: false` → `bash`
+    (`find … | xargs sha256sum | while …`); `steer: true` → `eval`;
+  - bare ask, no "run" nudge ("What is the 40th Fibonacci number…?"):
+    `steer: false` → `execute` (Code Mode); `steer: true` → `eval`;
 - the plugin also loads for ordinary project directories (not just this repo),
   so `eval` is available in normal sessions;
 - the same flow works after `opencode plugin add github:tanc/opencode-eval`,
