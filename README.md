@@ -126,13 +126,14 @@ request. Note this is a different mechanism from `ctx.tool.transform`, where an
 `editor.update("shell", …)` changes `ctx.tool.list()` but not the wire.
 
 Why the redirect and not just the reminder: an audit of recent build sessions
-with the plugin installed found **0 `eval` calls** against ~1.7k `bash` calls,
-of which roughly 40% were script-shaped (heredocs, `$(...)`, multi-statement) —
-precisely the cases `eval` exists for. The same pattern appeared on two models
-(DeepSeek 4.1 Flash and Qwen3.8 Flash), so it is not one model's quirk. A single
-system reminder did not change tool choice. Set `steerTools` to change which
-descriptions are edited. (The nudge also competes with Code Mode: unsteered, a
-bare computational ask chose `execute`.)
+running the earlier **reminder-only** steering (before the redirect existed)
+found **0 `eval` calls** against ~1.7k `bash` calls, of which roughly 40% were
+script-shaped (heredocs, `$(...)`, multi-statement) — precisely the cases `eval`
+exists for. The same pattern appeared on two models (DeepSeek 4.1 Flash and
+Qwen3.8 Flash), so it is not one model's quirk. In other words the reminder alone
+did not change tool choice, which is why the redirect was added. Set `steerTools`
+to change which descriptions are edited. (The nudge also competes with Code Mode:
+unsteered, a bare computational ask chose `execute`.)
 
 ## Prompt caching
 
